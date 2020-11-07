@@ -1,12 +1,10 @@
 package com.chy.lonejob.zookeeper;
 
 
-import org.apache.commons.lang.RandomStringUtils;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.recipes.cache.CuratorCache;
-import org.apache.curator.framework.recipes.cache.CuratorCacheListener;
+
 import org.apache.curator.retry.RetryForever;
 import org.apache.zookeeper.CreateMode;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

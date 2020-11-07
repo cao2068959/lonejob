@@ -2,17 +2,19 @@ package com.chy.lonejob.zookeeper;
 
 
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.listen.StandardListenerManager;
-import org.apache.curator.framework.recipes.cache.ChildData;
-import org.apache.curator.framework.recipes.cache.CuratorCache;
-import org.apache.curator.framework.recipes.cache.CuratorCacheListener;
+import org.apache.curator.framework.recipes.cache.*;
+
 import org.apache.zookeeper.CreateMode;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class ZkTemplate {
 
     CuratorFramework client;
+
+    ConcurrentHashMap<String, PathChildrenCache> pathChildrenCacheHolder = new ConcurrentHashMap<>();
 
     public ZkTemplate(CuratorFramework curatorFramework) {
         this.client = curatorFramework;
@@ -28,7 +30,7 @@ public class ZkTemplate {
      */
     public boolean addEphemeralNode(String path, String value) {
         try {
-            client.create().creatingParentContainersIfNeeded()
+            String s = client.create().creatingParentContainersIfNeeded()
                     .withMode(CreateMode.EPHEMERAL).forPath(path, value.getBytes());
             return true;
         } catch (Exception e) {
@@ -46,14 +48,54 @@ public class ZkTemplate {
      * @param path
      * @param consumer
      */
-    public void addDeleteListen(String path, Consumer<ChildData> consumer) {
-        CuratorCache curatorCache = CuratorCache.builder(client, path).build();
-        CuratorCacheListener listener = CuratorCacheListener.builder().forDeletes(consumer).build();
-        StandardListenerManager<CuratorCacheListener> standardListenerManager=
-                (StandardListenerManager) curatorCache.listenable();
-        standardListenerManager.forEach();
+    public void addDeleteListen(String path, String id, Consumer<ChildData> consumer) {
+        String deleteId = "delete-" + id;
 
-        curatorCache.listenable().addListener(listener);
+        PathChildrenCache pathChildrenCache = getPathChildren(path);
+
+
+        AtomicBoolean isRegister = new AtomicBoolean(false);
+        pathChildrenCache.getListenable().forEach((listener) -> {
+            if (listener instanceof PathChildrenCacheListenerWrapper) {
+                return null;
+            }
+            PathChildrenCacheListenerWrapper wrapper = (PathChildrenCacheListenerWrapper) listener;
+            if (deleteId.equals(wrapper.getId())) {
+                isRegister.set(true);
+            }
+            return null;
+        });
+        //放置重复注册
+        if (isRegister.get()) {
+            return;
+        }
+        PathChildrenCacheListenerWrapper listenerWrapper = new PathChildrenCacheListenerWrapper(id, PathChildrenCacheEvent.Type.CHILD_REMOVED, consumer);
+        pathChildrenCache.getListenable().addListener(listenerWrapper);
+
     }
+
+
+    private PathChildrenCache getPathChildren(String path) {
+        PathChildrenCache pathChildrenCache = pathChildrenCacheHolder.get(path);
+        if (pathChildrenCache != null) {
+            return pathChildrenCache;
+        }
+
+        synchronized (pathChildrenCacheHolder) {
+            pathChildrenCache = pathChildrenCacheHolder.get(path);
+            if (pathChildrenCache != null) {
+                return pathChildrenCache;
+            }
+            pathChildrenCache = new PathChildrenCache(client, path, true);
+            try {
+                pathChildrenCache.start();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            pathChildrenCacheHolder.put(path, pathChildrenCache);
+            return pathChildrenCache;
+        }
+    }
+
 
 }
