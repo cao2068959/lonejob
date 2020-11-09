@@ -56,5 +56,15 @@
 	</dependencies>
 
 
+	<distributionManagement>
+		<snapshotRepository>
+			<id>xr-snapshots</id>
+			<url>http://nexus.aihaisi.com/repository/snapshots/</url>
+		</snapshotRepository>
+		<repository>
+			<id>xr-releases</id>
+			<url>http://nexus.aihaisi.com/repository/releases/</url>
+		</repository>
+	</distributionManagement>
 
 </project>

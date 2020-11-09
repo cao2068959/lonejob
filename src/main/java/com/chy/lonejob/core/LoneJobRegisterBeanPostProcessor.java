@@ -7,11 +7,13 @@ import com.chy.lonejob.actuator.task.Task;
 import com.chy.lonejob.annotations.LoneComponent;
 import com.chy.lonejob.annotations.LoneJob;
 import com.chy.lonejob.zookeeper.ZkTemplate;
+import com.google.common.collect.Lists;
 import lombok.Data;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
 
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
@@ -26,6 +28,7 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 
 public class LoneJobRegisterBeanPostProcessor implements BeanFactoryAware, BeanPostProcessor, ApplicationListener<ContextRefreshedEvent> {
 
@@ -127,11 +130,27 @@ public class LoneJobRegisterBeanPostProcessor implements BeanFactoryAware, BeanP
     }
 
 
-    private TaskScheduler getTaskScheduler() {
-        TaskScheduler scheduler = beanFactory.getBean(TaskScheduler.class);
-        return scheduler;
-
+    private Object getTaskScheduler() {
+        Object result = null;
+        ArrayList<Class<?>> classArrayList = Lists.newArrayList(TaskScheduler.class, ScheduledExecutorService.class);
+        for (Class<?> type : classArrayList) {
+            result = getTaskScheduler(type);
+            if (result != null) {
+                return result;
+            }
+        }
+        throw new NoSuchBeanDefinitionException("lonejon-scheduler");
     }
+
+    private Object getTaskScheduler(Class type) {
+        try {
+            return beanFactory.getBean(type);
+        } catch (NoSuchBeanDefinitionException e) {
+
+        }
+        return null;
+    }
+
 
     /**
      * 当容器启动完成后去设在 定时任务的线程池
@@ -140,7 +159,7 @@ public class LoneJobRegisterBeanPostProcessor implements BeanFactoryAware, BeanP
      */
     @Override
     public void onApplicationEvent(ContextRefreshedEvent event) {
-        scheduledTaskRegistrar.setTaskScheduler(getTaskScheduler());
+        scheduledTaskRegistrar.setScheduler(getTaskScheduler());
         scheduledTaskRegistrar.afterPropertiesSet();
     }
 
